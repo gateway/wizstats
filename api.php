@@ -432,6 +432,39 @@ if ($cmd == "getblocks") {
 
 }
 
+if ($cmd == "getuserpayout") {
+
+	$link = pg_pconnect("dbname=$psqldb user=$psqluser password='$psqlpass' host=$psqlhost");
+	if (isset($_GET["username"])) {
+		$givenuser = $_GET["username"];
+		$bits =  hex2bits(\Bitcoin::addressToHash160($givenuser));
+		$user_id = get_user_id_from_address($link, $givenuser);
+		if (!$user_id) {
+			ws_api_error("$cmd: Username $givenuser not found in database.");
+		}
+	} else {
+		ws_api_error("$cmd: No valid user id specified");
+	}
+
+	$limit = ($_GET['limit']) ? (int)$_GET['limit'] : 10;
+
+	$sql = "select stats_transactions.time as time, stats_payouts.amount as amount, stats_transactions.hash as txhash, stats_transactions.coinbase as coinbase, stats_blocks.blockhash as blockhash from $psqlschema.stats_payouts left join $psqlschema.stats_transactions on stats_transactions.id=transaction_id left join $psqlschema.stats_blocks on block_id=stats_blocks.id where stats_payouts.user_id=$user_id order by time desc limit $limit;";	
+	
+	$result = pg_exec($link, $sql);
+	$numrows = pg_numrows($result);
+
+	if($numrows > 0) {
+		for($i = 0; $i < $numrows; $i++) {
+			$row = pg_fetch_array($result, $i);
+			$data[$row["time"]] = prettySatoshis($row["amount"]);		
+		}
+	} else {
+		$data["output"] = "No Data Found";
+	}
+
+	echo ws_api_encode($data);
+	exit;
+}
 
 
 ws_api_error("Command not found");
